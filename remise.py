@@ -38,12 +38,12 @@ if not st.session_state["login"]:
     st.stop()
 
 # ============================================================
-# 📄 PAGE PRINCIPALE : Remise de chèques
+# 🧾 PAGE PRINCIPALE - Remise de chèques
 # ============================================================
 st.title("🏦 Génération d’écritures comptables - Remise de chèques")
-st.write("Uploadez un fichier PDF de remise de chèques pour générer automatiquement le fichier d’écritures comptables.")
+st.write("Uploadez un fichier PDF de remise de chèques pour générer automatiquement les écritures comptables correspondantes.")
 
-uploaded_file = st.file_uploader("📤 Importer le PDF", type=["pdf"])
+uploaded_file = st.file_uploader("📤 Importer le PDF de remise de chèques", type=["pdf"])
 
 if uploaded_file:
     try:
@@ -52,35 +52,46 @@ if uploaded_file:
             for page in pdf.pages:
                 texte_complet += page.extract_text() + "\n"
 
-        # 🔎 Extraction de la date (première date du document)
+        # 🔎 Extraction de la date de remise (première date trouvée)
         match_date = re.search(r"\d{2}/\d{2}/\d{2}", texte_complet)
         date_remise = match_date.group(0) if match_date else ""
 
-        # 🔎 Extraction des lignes "Tireur / Montant"
-        pattern = r"/\s*([A-ZÉÈÊÂÎÔÛÀÙÇ\s]+)\s+([\d\s,]+)"
+        # 🔎 Extraction des lignes : "27265 / CROMBET 200,00"
+        pattern = r"(\d{5})\s*/\s*([A-ZÉÈÊÂÎÔÛÀÙÇa-zéèêâîôûàùç\s]+)\s+([\d\s,]+)"
         lignes = re.findall(pattern, texte_complet)
 
         data = []
-        for tireur, montant in lignes:
-            tireur_nom = tireur.strip().split()[0]  # prend le premier mot (ex: DUPONT)
-            compte = f"4110{tireur_nom[0].upper()}"
+        total_remise = 0.0
+
+        # 🔹 Une ligne par chèque (client)
+        for num_cheque, tireur, montant in lignes:
+            tireur_nom = tireur.strip().split()[0].upper()  # ex: DUPONT
+            compte = f"4110{tireur_nom[0]}"
             montant_float = float(montant.replace(" ", "").replace(",", "."))
-            data.append([date_remise, "OD", compte, "", montant_float])
+            total_remise += montant_float
+            libelle = f"{tireur.strip().title()} - {num_cheque}"
+            data.append([date_remise, "OD", compte, libelle, "", round(montant_float, 2)])
 
-        # 🔎 Extraction du total de la remise
-        match_total = re.search(r"Total de la remise\s*:\s*([\d\s,]+)", texte_complet)
-        if match_total:
-            total = float(match_total.group(1).replace(" ", "").replace(",", "."))
-            data.append([date_remise, "OD", "5112", total, ""])
+        # 🔹 Ligne banque (débit global)
+        data.append([date_remise, "OD", "5112", f"Remise de chèques {date_remise}", round(total_remise, 2), ""])
 
-        # Création du DataFrame
-        df = pd.DataFrame(data, columns=["Date", "Journal", "Compte", "Débit", "Crédit"])
+        # 🔹 Création du DataFrame
+        df = pd.DataFrame(data, columns=["Date", "Journal", "Compte", "Libellé", "Débit", "Crédit"])
+
+        # ✅ Vérification équilibre comptable
+        debit_total = df["Débit"].apply(pd.to_numeric, errors="coerce").sum()
+        credit_total = df["Crédit"].apply(pd.to_numeric, errors="coerce").sum()
+        ecart = round(debit_total - credit_total, 2)
+
+        if ecart == 0:
+            st.success(f"✅ Écritures équilibrées (Total Débit = Total Crédit = {debit_total:,.2f} €)")
+        else:
+            st.warning(f"⚠️ Écart détecté : {ecart:,.2f} € (Débit={debit_total:,.2f} / Crédit={credit_total:,.2f})")
 
         # Affichage du tableau
-        st.success("✅ Données extraites avec succès !")
         st.dataframe(df)
 
-        # Export Excel en mémoire
+        # Export Excel
         buffer = BytesIO()
         df.to_excel(buffer, index=False, engine="openpyxl")
         buffer.seek(0)
