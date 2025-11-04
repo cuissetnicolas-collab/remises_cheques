@@ -4,3 +4,4 @@ pandas
 numpy
 openpyxl
 plotly>=5.0.0
+pdfplumber
