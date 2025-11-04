@@ -52,18 +52,21 @@ if uploaded_file:
             for page in pdf.pages:
                 texte_complet += page.extract_text() + "\n"
 
-        # 🔎 Extraction de la date de remise (première date trouvée)
+        # 🔧 Nettoyage du texte
+        texte_complet = texte_complet.replace("\xa0", " ").replace("\n", " ")
+
+        # 🔎 Extraction de la date de remise
         match_date = re.search(r"\d{2}/\d{2}/\d{2}", texte_complet)
         date_remise = match_date.group(0) if match_date else ""
 
-        # 🔎 Extraction des lignes : "27265 / CROMBET 200,00"
-        pattern = r"(\d{5})\s*/\s*([A-ZÉÈÊÂÎÔÛÀÙÇa-zéèêâîôûàùç\s]+)\s+([\d\s,]+)"
+        # 🔎 Extraction des lignes "numéro / tireur montant"
+        pattern = r"(\d{4,6})\s*/\s*([A-ZÉÈÊÂÎÔÛÀÙÇa-zéèêâîôûàùç\s]+?)\s+([\d\s,]+)(?=\s+Page)"
         lignes = re.findall(pattern, texte_complet)
 
         data = []
         total_remise = 0.0
 
-        # 🔹 Une ligne par chèque (client)
+        # 🔹 Une ligne par chèque
         for num_cheque, tireur, montant in lignes:
             tireur_nom = tireur.strip().split()[0].upper()  # ex: DUPONT
             compte = f"4110{tireur_nom[0]}"
@@ -75,10 +78,10 @@ if uploaded_file:
         # 🔹 Ligne banque (débit global)
         data.append([date_remise, "OD", "5112", f"Remise de chèques {date_remise}", round(total_remise, 2), ""])
 
-        # 🔹 Création du DataFrame
+        # Création du DataFrame
         df = pd.DataFrame(data, columns=["Date", "Journal", "Compte", "Libellé", "Débit", "Crédit"])
 
-        # ✅ Vérification équilibre comptable
+        # Vérification équilibre
         debit_total = df["Débit"].apply(pd.to_numeric, errors="coerce").sum()
         credit_total = df["Crédit"].apply(pd.to_numeric, errors="coerce").sum()
         ecart = round(debit_total - credit_total, 2)
@@ -88,10 +91,8 @@ if uploaded_file:
         else:
             st.warning(f"⚠️ Écart détecté : {ecart:,.2f} € (Débit={debit_total:,.2f} / Crédit={credit_total:,.2f})")
 
-        # Affichage du tableau
         st.dataframe(df)
 
-        # Export Excel
         buffer = BytesIO()
         df.to_excel(buffer, index=False, engine="openpyxl")
         buffer.seek(0)
