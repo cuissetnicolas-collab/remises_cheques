@@ -53,7 +53,7 @@ if uploaded_file:
             for page in pdf.pages:
                 texte_complet += page.extract_text() + "\n"
 
-        # --- Affichage du texte brut pour vérification ---
+        # --- Affichage du texte brut pour contrôle (debug) ---
         st.subheader("🪶 Aperçu du texte extrait du PDF (1000 premiers caractères)")
         st.text(texte_complet[:1000])
 
@@ -61,24 +61,29 @@ if uploaded_file:
         match_date = re.search(r"\d{2}/\d{2}/\d{2}", texte_complet)
         date_remise = match_date.group(0) if match_date else ""
 
-        # --- Extraction des lignes de chèques ---
-        # Format détecté : NOM 27295 / 26/09/2025 1 195,62
-        pattern = r"([A-ZÉÈÊÂÎÔÛÀÙÇa-zéèêâîôûàùç\s]+)\s+(\d{4,6})\s*/\s*\d{2}/\d{2}/\d{4}\s+([\d\s,]+)"
+        # --- Nouvelle regex robuste ---
+        # Gère : plusieurs numéros (ex: "27207, 27208"), "(non soldé)", espaces variables
+        pattern = r"([A-ZÉÈÊÂÎÔÛÀÙÇa-zéèêâîôûàùç\s]+?)\s+([\d,\s()non]+)\s*/\s*\d{2}/\d{2}/\d{4}\s+([\d\s,]+)"
         lignes = re.findall(pattern, texte_complet)
 
         data = []
         total_remise = 0.0
 
-        # --- Construction des lignes de crédit (par chèque) ---
         for tireur, num_cheque, montant in lignes:
-            # Nettoyage du nom et du montant
+            # Nettoyage du nom et du numéro de chèque
             tireur_clean = tireur.strip().title()
+            num_cheque_clean = re.sub(r"\(.*?\)", "", num_cheque).replace(" ", "").strip(",")  # supprime (non soldé)
             tireur_nom = tireur_clean.split()[0].upper()
             compte = f"4110{tireur_nom[0]}"
-            montant_float = float(montant.replace(" ", "").replace(",", "."))
+
+            # Conversion du montant
+            try:
+                montant_float = float(montant.replace(" ", "").replace(",", "."))
+            except:
+                continue  # ignore si montant illisible
             total_remise += montant_float
 
-            libelle = f"{tireur_clean} - {num_cheque}"
+            libelle = f"{tireur_clean} - {num_cheque_clean}"
             data.append([date_remise, "OD", compte, libelle, "", round(montant_float, 2)])
 
         # --- Ligne banque (débit global) ---
