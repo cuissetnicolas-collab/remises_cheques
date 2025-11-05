@@ -68,15 +68,14 @@ if uploaded_file:
             r"\s*/\s*\d{2}/\d{2}/\d{4}"            # Date
             r"\s+([\d\s,]+)"                       # Montant
         )
-
         lignes = re.findall(pattern, texte_complet)
 
         data = []
         total_remise = 0.0
 
         for tireur, num_cheque, montant in lignes:
-            # 🔹 Exclure les lignes d’en-tête
-            if "échéance" in tireur.lower() or "montant" in tireur.lower():
+            # 🔹 Ignore uniquement les lignes clairement d’en-tête
+            if any(mot in tireur.lower() for mot in ["tireur", "banque", "échéance", "montant"]):
                 continue
 
             # Nettoyage du nom et du numéro
