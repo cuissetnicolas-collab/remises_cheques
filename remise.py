@@ -53,37 +53,43 @@ if uploaded_file:
             for page in pdf.pages:
                 texte_complet += page.extract_text() + "\n"
 
-        # --- Affichage du texte brut pour débogage ---
+        # --- Affichage du texte brut pour vérification ---
         st.subheader("🪶 Aperçu du texte extrait du PDF (1000 premiers caractères)")
         st.text(texte_complet[:1000])
 
-        # --- Extraction de la date ---
+        # --- Extraction de la date de remise ---
         match_date = re.search(r"\d{2}/\d{2}/\d{2}", texte_complet)
         date_remise = match_date.group(0) if match_date else ""
 
         # --- Extraction des lignes de chèques ---
-        pattern = r"(\d{4,6})\s*/\s*([A-ZÉÈÊÂÎÔÛÀÙÇa-zéèêâîôûàùç\s]+)\s+([\d\s,]+)"
+        # Format détecté : NOM 27295 / 26/09/2025 1 195,62
+        pattern = r"([A-ZÉÈÊÂÎÔÛÀÙÇa-zéèêâîôûàùç\s]+)\s+(\d{4,6})\s*/\s*\d{2}/\d{2}/\d{4}\s+([\d\s,]+)"
         lignes = re.findall(pattern, texte_complet)
 
         data = []
         total_remise = 0.0
 
         # --- Construction des lignes de crédit (par chèque) ---
-        for num_cheque, tireur, montant in lignes:
-            tireur_nom = tireur.strip().split()[0].upper()
+        for tireur, num_cheque, montant in lignes:
+            # Nettoyage du nom et du montant
+            tireur_clean = tireur.strip().title()
+            tireur_nom = tireur_clean.split()[0].upper()
             compte = f"4110{tireur_nom[0]}"
             montant_float = float(montant.replace(" ", "").replace(",", "."))
             total_remise += montant_float
-            libelle = f"{tireur.strip().title()} - {num_cheque}"
+
+            libelle = f"{tireur_clean} - {num_cheque}"
             data.append([date_remise, "OD", compte, libelle, "", round(montant_float, 2)])
 
-        # --- Ligne banque (débit total) ---
+        # --- Ligne banque (débit global) ---
         data.append([date_remise, "OD", "5112", f"Remise de chèques {date_remise}", round(total_remise, 2), ""])
 
         # --- Création du DataFrame ---
         df = pd.DataFrame(data, columns=["Date", "Journal", "Compte", "Libellé", "Débit", "Crédit"])
 
-        # --- Vérification de l'équilibre ---
+        # ============================================================
+        # ✅ Vérification de l'équilibre comptable
+        # ============================================================
         debit_total = df["Débit"].apply(pd.to_numeric, errors="coerce").sum()
         credit_total = df["Crédit"].apply(pd.to_numeric, errors="coerce").sum()
         ecart = round(debit_total - credit_total, 2)
@@ -96,7 +102,9 @@ if uploaded_file:
         # --- Affichage du tableau ---
         st.dataframe(df, use_container_width=True)
 
-        # --- Export Excel ---
+        # ============================================================
+        # 💾 Export Excel en mémoire
+        # ============================================================
         buffer = BytesIO()
         df.to_excel(buffer, index=False, engine="openpyxl")
         buffer.seek(0)
