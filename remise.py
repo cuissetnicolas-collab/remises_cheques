@@ -52,9 +52,9 @@ if uploaded_file:
             for page in pdf.pages:
                 texte_complet += page.extract_text() + "\n"
                 with pdfplumber.open(uploaded_file) as pdf:
-                texte_complet = ""
-                for page in pdf.pages:
-                texte_complet += page.extract_text() + "\n"
+                    texte_complet = ""
+                    for page in pdf.pages:
+                        texte_complet += page.extract_text() + "\n"
 
         # 🔎 Extraction de la date (première date du document)
         match_date = re.search(r"\d{2}/\d{2}/\d{2}", texte_complet)
