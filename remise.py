@@ -61,10 +61,6 @@ if uploaded_file:
             flags=re.IGNORECASE
         )
 
-        # --- Aperçu du texte brut (debug) ---
-        st.subheader("🪶 Aperçu du texte extrait du PDF (1000 premiers caractères)")
-        st.text(texte_complet[:1000])
-
         # --- Extraction de la date de remise ---
         match_date = re.search(r"\d{2}/\d{2}/\d{2}", texte_complet)
         date_remise = match_date.group(0) if match_date else ""
