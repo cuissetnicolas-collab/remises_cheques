@@ -64,7 +64,7 @@ if uploaded_file:
         # --- Nouvelle regex hyper robuste ---
         pattern = (
             r"([A-ZÉÈÊÂÎÔÛÀÙÇa-zéèêâîôûàùç\s]+?)"  # Nom du tireur
-            r"\s+([\d,\s]+(?:\(non soldé\))?)"     # Numéro(s) de chèque + (non soldé) éventuel
+            r"\s+([\d,\s]+(?:\(non soldé\))?)"     # Numéro(s) de chèque + (non soldé)
             r"\s*/\s*\d{2}/\d{2}/\d{4}"            # Date
             r"\s+([\d\s,]+)"                       # Montant
         )
@@ -75,6 +75,10 @@ if uploaded_file:
         total_remise = 0.0
 
         for tireur, num_cheque, montant in lignes:
+            # 🔹 Exclure les lignes d’en-tête
+            if "échéance" in tireur.lower() or "montant" in tireur.lower():
+                continue
+
             # Nettoyage du nom et du numéro
             tireur_clean = tireur.strip().title()
             num_cheque_clean = re.sub(r"\(.*?\)", "", num_cheque).replace(" ", "").strip(",")
@@ -91,8 +95,15 @@ if uploaded_file:
             libelle = f"{tireur_clean} - {num_cheque_clean}"
             data.append([date_remise, "OD", compte, libelle, "", round(montant_float, 2)])
 
-        # --- Ligne banque (débit global) ---
-        data.append([date_remise, "OD", "5112", f"Remise de chèques {date_remise}", round(total_remise, 2), ""])
+        # --- Ligne de contrepartie (débit global) ---
+        data.append([
+            date_remise,
+            "OD",
+            "581000000",
+            f"Remise de chèques {date_remise}",
+            round(total_remise, 2),
+            ""
+        ])
 
         # --- Création du DataFrame ---
         df = pd.DataFrame(data, columns=["Date", "Journal", "Compte", "Libellé", "Débit", "Crédit"])
