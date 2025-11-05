@@ -53,7 +53,7 @@ if uploaded_file:
             for page in pdf.pages:
                 texte_complet += page.extract_text() + "\n"
 
-        # --- Affichage du texte brut pour contrôle (debug) ---
+        # --- Aperçu du texte brut (debug) ---
         st.subheader("🪶 Aperçu du texte extrait du PDF (1000 premiers caractères)")
         st.text(texte_complet[:1000])
 
@@ -61,18 +61,23 @@ if uploaded_file:
         match_date = re.search(r"\d{2}/\d{2}/\d{2}", texte_complet)
         date_remise = match_date.group(0) if match_date else ""
 
-        # --- Nouvelle regex robuste ---
-        # Gère : plusieurs numéros (ex: "27207, 27208"), "(non soldé)", espaces variables
-        pattern = r"([A-ZÉÈÊÂÎÔÛÀÙÇa-zéèêâîôûàùç\s]+?)\s+([\d,\s()non]+)\s*/\s*\d{2}/\d{2}/\d{4}\s+([\d\s,]+)"
+        # --- Nouvelle regex hyper robuste ---
+        pattern = (
+            r"([A-ZÉÈÊÂÎÔÛÀÙÇa-zéèêâîôûàùç\s]+?)"  # Nom du tireur
+            r"\s+([\d,\s]+(?:\(non soldé\))?)"     # Numéro(s) de chèque + (non soldé) éventuel
+            r"\s*/\s*\d{2}/\d{2}/\d{4}"            # Date
+            r"\s+([\d\s,]+)"                       # Montant
+        )
+
         lignes = re.findall(pattern, texte_complet)
 
         data = []
         total_remise = 0.0
 
         for tireur, num_cheque, montant in lignes:
-            # Nettoyage du nom et du numéro de chèque
+            # Nettoyage du nom et du numéro
             tireur_clean = tireur.strip().title()
-            num_cheque_clean = re.sub(r"\(.*?\)", "", num_cheque).replace(" ", "").strip(",")  # supprime (non soldé)
+            num_cheque_clean = re.sub(r"\(.*?\)", "", num_cheque).replace(" ", "").strip(",")
             tireur_nom = tireur_clean.split()[0].upper()
             compte = f"4110{tireur_nom[0]}"
 
@@ -80,7 +85,7 @@ if uploaded_file:
             try:
                 montant_float = float(montant.replace(" ", "").replace(",", "."))
             except:
-                continue  # ignore si montant illisible
+                continue
             total_remise += montant_float
 
             libelle = f"{tireur_clean} - {num_cheque_clean}"
