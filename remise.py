@@ -53,6 +53,14 @@ if uploaded_file:
             for page in pdf.pages:
                 texte_complet += page.extract_text() + "\n"
 
+        # --- Nettoyage du texte : suppression de la ligne d'en-tête ---
+        texte_complet = re.sub(
+            r"Tireur\s+Banque\s*/\s*N°\s*chèque\s*Date\s*d['’]écheance\s*Montant",
+            "",
+            texte_complet,
+            flags=re.IGNORECASE
+        )
+
         # --- Aperçu du texte brut (debug) ---
         st.subheader("🪶 Aperçu du texte extrait du PDF (1000 premiers caractères)")
         st.text(texte_complet[:1000])
@@ -61,36 +69,33 @@ if uploaded_file:
         match_date = re.search(r"\d{2}/\d{2}/\d{2}", texte_complet)
         date_remise = match_date.group(0) if match_date else ""
 
-        # --- Nouvelle regex hyper robuste ---
+        # --- Regex robuste pour extraire les lignes clients ---
         pattern = (
             r"([A-ZÉÈÊÂÎÔÛÀÙÇa-zéèêâîôûàùç\s]+?)"  # Nom du tireur
-            r"\s+([\d,\s]+(?:\(non soldé\))?)"     # Numéro(s) de chèque + (non soldé)
+            r"\s+([\d,\s]+(?:\(non soldé\))?)"     # Numéro(s) de chèque (+ non soldé)
             r"\s*/\s*\d{2}/\d{2}/\d{4}"            # Date
             r"\s+([\d\s,]+)"                       # Montant
         )
+
         lignes = re.findall(pattern, texte_complet)
 
         data = []
         total_remise = 0.0
 
         for tireur, num_cheque, montant in lignes:
-            # 🔹 Ignore uniquement les lignes clairement d’en-tête
-            if any(mot in tireur.lower() for mot in ["tireur", "banque", "échéance", "montant"]):
-                continue
-
-            # Nettoyage du nom et du numéro
+            # --- Nettoyage des champs ---
             tireur_clean = tireur.strip().title()
             num_cheque_clean = re.sub(r"\(.*?\)", "", num_cheque).replace(" ", "").strip(",")
             tireur_nom = tireur_clean.split()[0].upper()
             compte = f"4110{tireur_nom[0]}"
 
-            # Conversion du montant
+            # --- Conversion du montant ---
             try:
                 montant_float = float(montant.replace(" ", "").replace(",", "."))
             except:
                 continue
-            total_remise += montant_float
 
+            total_remise += montant_float
             libelle = f"{tireur_clean} - {num_cheque_clean}"
             data.append([date_remise, "OD", compte, libelle, "", round(montant_float, 2)])
 
